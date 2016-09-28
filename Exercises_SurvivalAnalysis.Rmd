@@ -1,0 +1,330 @@
+---
+title: "Applied_Survival_Analysis_Exercises"
+author: "Brigitte"
+date: "September 12, 2016"
+output: html_document
+---
+<!-- rmarkdown v1 -->
+# Applied Survival Analysis Using R, D.R. Moore
+## Exercises in book and exercise section
+
+```{r setup, echo=FALSE}
+qpch <- function(p, cuts, levels, lower.tail = TRUE, log.p = FALSE){
+    if (log.p) p <- exp(p)
+    if (any(p >= 1)) stop("p must be < 1") 
+    if (any(p <= 0)) stop("p must be > 0") 
+    if (!lower.tail) p <- 1 - p
+    n <- length(p)
+    y <- numeric(n)
+    f <- function(q, x){
+        ppch(q, cuts, levels) - x
+    }
+    for (i in 1:n){
+        y[i] <- uniroot(f, interval = c(0, 2000), x = p[i])$root
+    }
+    y
+}
+
+
+rpch <- function(n, cuts, levels){
+    x <- runif(n)
+    qpch(x,cuts,levels)
+}
+```
+
+## Exercise 1
+```{r}
+library(asaur)
+head(gastricXelox)
+table(gastricXelox$delta)
+death = length(which(gastricXelox$delta==1))
+pwfollow = sum(gastricXelox$timeWeeks)
+eventratepp = death/pwfollow
+```
+
+##Chapter 2
+```{r}#, echo=FALSE}
+library(survival)
+tm = c(0,1/365,7/365,28/365,1:109)
+hazMale = survexp.us[,"male","2004"]
+hazFemale = survexp.us[,"female","2004"]
+plot(log(hazMale) ~ tm,type="n",xlab="age",ylab="log hazard")
+lines(log(hazMale) ~ tm)
+lines(log(hazFemale) ~ tm,col='red')
+legend('top',c('hazard male','hazard female'),col = c('black','red'),lty=c(1,1)) # gives the legend  symbols
+```
+
+## Modeling survival data
+### Weibull distribution
+h(t) = alpha*lambda*(lambda*t)^(alpha-1)
+and cumulative  
+H(t) = (lambda*t)^alpha  
+Function pweibull calculates the pdf of the Weibull distribution.
+
+
+```{r}
+
+curve(pweibull(x,shape=1.5,scale=1/0.03,
+               lower.tail = F),from=0,to=80,ylim=c(0,1))
+
+```
+
+Nowe we want to plot the hazard function with this shape and scale. Define the function first as it is dweibull/pweibull and will be easier to read if defined in separate command.
+
+```{r}
+weibHaz = function(x,shape,scale) {
+  dweibull(x,shape=shape,scale=scale)/pweibull(x,shape=shape,scale=scale,
+                                               lower.tail=F)
+}
+curve(weibHaz(x,shape=1.5,scale=1/0.03),from=0,to=80,
+      ylab ='Hazard', xlab ='Time' , col = 'red', main = 'Weibull Hazard dweibull / pweibull, i.e. PDF/CDF')
+curve(weibHaz(x,shape=0.75,scale=1/0.03),from=0,to=80,
+      ylab ='Hazard', xlab ='Time' , col = 'blue',add = T)
+
+legend('top',c('alpha= 1.5, gam=0.03 ','al=0.75, gam=0.03 '),
+       col = c('red','blue'),lty=c(1,1))
+```
+
+Instead of dweibull and pweibull, you could also use the gamma hazard function with dgamma dna pgamma, or the log-normal, log-logistic or Pareto distribution, for example. 
+
+### Calculating the Survival function from the Hazard function
+
+Numerical solution: For example the very first plot above needs numerical solution. First compute the vector of differences, then find the cumulative hazard function using cumsum.
+
+```{r}
+tmnew = c(0,1/365,7/365,28/365,1:110)
+tm.diff = diff(tmnew)
+survMale = exp(-cumsum(hazMale*tm.diff)*365.24)
+survFemale = exp(-cumsum(hazFemale*tm.diff)*365.24)
+sum(survMale*tm.diff)
+sum(survFemale*tm.diff)
+
+```
+
+
+## Exercises page 24
+
+```{r}
+plot(log(survexp.us[,"female","2000"]) ~ tm,type="n",xlab="age",ylab="log hazard")
+lines(log(survexp.us[,"male","1940"]) ~ tm)
+lines(log(survexp.us[,"female","1940"]) ~ tm,col='red')
+lines(log(survexp.us[,"male","2000"]) ~ tm,lty=2)
+lines(log(survexp.us[,"female","2000"]) ~ tm,col='red',lty=2)
+legend('top',c('male 1940','female 1940','male 2000','female 2000'),col = c('black','red','black','red'),lty=c(1,1,2,2)) # gives the legend  symbols
+
+```
+2.1 Hazard rates were much lower in 2000 for children.
+
+```{r}
+ages = list()
+survMale = exp(-cumsum(survexp.us[,"male","1940"]*tm.diff)*365.24)
+survFemale = exp(-cumsum(survexp.us[,"female","1940"]*tm.diff)*365.24)
+ages$male40 = sum(survMale*tm.diff) # 1940 male
+ages$female40 = sum(survFemale*tm.diff) #§940 female
+survMale = exp(-cumsum(survexp.us[,"male","2000"]*tm.diff)*365.24)
+survFemale = exp(-cumsum(survexp.us[,"female","2000"]*tm.diff)*365.24)
+ages$male2000 = sum(survMale*tm.diff) # 2000 male
+ages$female2000 = sum(survFemale*tm.diff) #2000 female
+
+row.names <- names(ages)
+col.names <- c("Mean Age")
+cbind(as.data.frame(matrix(c(ages),nrow = 4, ncol = 1,
+                           dimnames = list(row.names, col.names))))
+
+```
+2.2. The mean age is printed above. It is calculated from the cumulative hazard function, then the are under the respective survival curves by multilying tm.diff, the width of each rectange, with the heights of the rectangles survMale etc.
+
+
+```{r}
+plot(log(survexp.usr[,"male","white","2000"]) ~ tm,type="n",xlab="age",ylab="log hazard")
+lines(log(survexp.usr[,"male","white","1940"]) ~ tm)
+lines(log(survexp.usr[,"male","black","1940"]) ~ tm,col='red')
+lines(log(survexp.usr[,"male","white","2000"]) ~ tm,lty=2)
+lines(log(survexp.usr[,"male","black","2000"]) ~ tm,col='red',lty=2)
+legend('top',c('white 1940','black 1940','white 2000','black 2000'),col = c('black','red','black','red'),lty=c(1,1,2,2)) # gives the legend  symbols
+
+```
+
+2.3. survexp.usr data. Plotted males for 1940 and 2000.
+
+
+2.4. In exercise 1.1, it looks like 3 death occured, i.e. d=3. The sum of the survival times is 5+5+4+3+1, i.e. V = 18. 
+l(lambda) = 3 log(lambda) - lambda * 18
+and lambda is 0.166
+```{r}
+3/18 # lambda = d/V
+3/(18^2) #var(lambda)
+```
+
+For question 2.5, I had difficulties plotting the hazard function as a stepwise linear function. I found package eha which helps.
+
+Name  | usage
+------  | ------
+Density  |  dpch(x, cuts, levels, log = FALSE)
+Distribution  |  ppch(q, cuts, levels, lower.tail = TRUE, log.p = FALSE)
+Quantile  | qpch(p, cuts, levels, lower.tail = TRUE, log.p = FALSE)
+Hazard function  | hpch(x, cuts, levels, log = FALSE)
+Cumulative hazard fun  | Hpch(x, cuts, levels, log.p = FALSE)
+Random gen for pch distr  | rpch(n, cuts, levels)
+
+
+```{r}
+library(eha)
+dimx = seq(0,10,0.1)
+hazfunc = hpch(dimx, 5, c(0.07,0.14), log = FALSE) #corresponding hazMale on p.13
+plot(hazfunc ~ dimx,type='n')
+lines(hazfunc ~dimx)
+
+# Survival from hazard:
+# 1. Differences
+dimdiff = diff(dimx)
+# 2. cumulative hazard function with cumsum, then survival by using S=exp(-integral(H))
+survfunc = exp(-cumsum(hazfunc[1:length(hazfunc)-1]*dimdiff))
+ # or with the 
+# 3. Plot this
+plot(survfunc ~ dimx[1:length(survfunc)],type='n',main='Survival function for stepwise linear hazard')
+lines(survfunc ~ dimx[1:length(survfunc)])
+
+# Mean survival time
+sum(survfunc*dimdiff)
+# This would be the mean.
+# Median survival time
+qpch(0.5, 5, c(0.07,0.14))
+ # or
+tt.linhaz = rpch(100, 5, c(0.07,0.14))
+mean(tt.linhaz)
+median(tt.linhaz)
+
+```
+
+
+2.6 Log Normal
+```{r}
+ml=0 # 1, 2
+dl = 0.25
+normHaz <- function(x,meanlog,sdlog){
+  dlnorm(x, meanlog, sdlog)/plnorm(x, meanlog, sdlog)
+}
+curve(normHaz(x,meanlog = ml, sdlog=dl),from=0,to=100,ylab='lognorm Hazard')
+curve(normHaz(x,meanlog = 2, sdlog=dl),from=0,to=100,ylab='lognorm Hazard',add=T,col='red')
+legend('top',c('meanlog=0','meanlog=2'),
+       col = c('black','red'),lty=c(1,1))
+
+```
+
+If a disease followed such a risk profile, the hazard would be verz high at young age and then being zero after around 18 years of age.
+
+## Chapter 3
+###Nonparametric Survival model: 
+Kaplan-Meier (and Nelson-Altschuler)
+```{r}
+tt = c(7,6,6,5,2,4)
+cens = c(0,1,0,0,1,1)
+Surv(tt,cens)
+result.km <- survfit(Surv(tt,cens) ~1, conf.type='log-log') # here add type ='fh' if you are interested in the Nelson-Altschuler
+summary(result.km)
+plot(result.km)
+
+```
+Now with real data
+```{r}
+timeMonths = gastricXelox$timeWeeks*7/30.25
+censored = gastricXelox$delta
+gastric.km = survfit(Surv(timeMonths,censored)~1,conf.type='log-log')
+plot(gastric.km,conf.int=T,main='PFS Progression Free Survival, GastricXelox')
+```
+
+To obtain median follow-up time, you first need to switch censored and non-censored 
+```{r}
+censored.follow = 1-censored
+```
+Reverse Kaplan-Meier
+```{r}
+survfit(Surv(timeMonths,censored.follow)~1)
+```
+
+## Smoothed hazard function Ch.3.4
+```{r}
+library(muhaz)
+smoothy = 2.25 # the smoothing parameter b
+plot(muhaz(tt,cens,max.time=8,bw.grid=smoothy,bw.method='global',b.cor='none'))
+
+gastric.haz = pehaz(timeMonths,censored,width=1,max.time=20)
+plot(gastric.haz,ylim=c(0,0.15))
+gastric.smooth = muhaz(timeMonths,censored,bw.smooth=20,b.cor='left',max.time = 20)
+lines(gastric.smooth)
+
+haz = gastric.smooth$haz.est
+times = gastric.smooth$est.grid
+surv = exp(-cumsum(haz[1:(length(haz)-1)]*diff(times)))
+plot(surv~times[1:(length(times)-1)])
+```
+
+
+## Left Truncation
+Channing House Data, left truncated because subjects who die at older ages more likely to enter the center than patients who died young. Treat 'entry' as left truncation: 
+```{r}
+head(ChanningHouse)
+ChanningHouse <- within(ChanningHouse,{
+     entryYears <- entry/12
+     exitYears <- exit/12})
+ChanningMales <- ChanningHouse[ChanningHouse$sex == 'Male',]
+# Estimate survival distribution 
+# Kaplan-Meier
+result.km <- survfit(Surv(entryYears,exitYears,cens,type='counting')
+                     ~1, data=ChanningMales)
+plot(result.km, xlim=c(63,101),conf.int=F)
+# Nelson-Altschuler-Aalen
+result.naa <- survfit(Surv(entryYears,exitYears,cens,type='counting')
+                      ~1,type='fleming-harrington',data=ChanningMales)
+lines(result.naa,col='blue',conf.int=F)
+legend('top',legend=c('Kaplan-Meier','Nelson-A-A'), lty=1,col=c('black','blue'))
+```
+
+
+
+## Exercises page 42
+3.1 Fig. 3.2, median surv is 6 and 95% conf is 2 and NA
+```{r}
+survfit(Surv(tt,cens)~1,conf.type='log-log')
+
+```
+3.2.
+```{r}
+gastric.km
+# To get the results at different quartiles, do https://stat.ethz.ch/R-manual/R-devel/library/survival/html/quantile.survfit.html
+quantile(gastric.km, probs = c(0.25, 0.5, 0.75), conf.int = TRUE)
+```
+
+First quartile =  (2.55,4.16,6.48)  (5%,bestestimate,95%)
+Is there another way to extract the values from the object survfit than with the quantile function?
+
+3.3
+```{r}
+par(mfrow=c(2,1))
+# already done earlier:
+#gastric.smooth = muhaz(timeMonths,censored,bw.smooth=20,b.cor='left',max.time = 20)
+plot(gastric.smooth,ylim=c(0,0.15))
+lines(muhaz(timeMonths,censored,bw.smooth=20,bw.grid=20,b.cor='left',max.time = 20),col='blue')
+```
+
+
+
+
+
+
+# General R repetition
+
+```{r}
+x.vec = 1:10
+y.vec = 3 + 2*x.vec + rnorm(10,mean=0,sd=2)
+plot(y.vec ~ x.vec)
+
+res.lm = lm(y.vec ~ x.vec)
+abline(res.lm)
+```
+This creates a linear equation y = 3 + 2X + epsilon
+And add a fitted line (linear regression)
+
+
+
